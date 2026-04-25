@@ -5,11 +5,13 @@ use serde::{Deserialize, Serialize};
 use crate::metric::{MetricValue, storage::builtin::JsonStorageProviderConfig};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum StorageProviderConfig {
     Json(JsonStorageProviderConfig),
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct StorageConfig {
     pub provider: StorageProviderConfig,
 }

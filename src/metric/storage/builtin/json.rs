@@ -20,6 +20,7 @@ pub enum Error {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct JsonStorageProviderConfig {
     pub path: PathBuf,
     /// Whether to write the JSON file every write
@@ -37,6 +38,7 @@ type JsonMetricMap = HashMap<String, Vec<JsonMetric>>;
 type JsonMetric = (i64, JsonMetricValue);
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 enum JsonMetricValue {
     Integer(i64),
     Float(f64),

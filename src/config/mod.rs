@@ -1,17 +1,20 @@
-mod builtin;
+pub mod builtin;
+
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
 use crate::metric::storage::StorageConfig;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct Config {
     pub storage: StorageConfig,
 }
 
 pub trait ConfigProvider {
     type Error: std::error::Error;
-    async fn get(&self) -> Result<Config, Self::Error>;
+    fn get(&self) -> impl std::future::Future<Output = Result<Config, Self::Error>> + Send;
 }
 
 impl Default for Config {
@@ -27,4 +30,10 @@ impl Default for Config {
             },
         }
     }
+}
+
+pub async fn setup_config_provider(path: PathBuf) -> Result<impl ConfigProvider, Box<dyn std::error::Error>> {
+    builtin::json::JsonConfigProvider::init(path)
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
 }

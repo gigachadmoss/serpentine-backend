@@ -54,3 +54,23 @@ impl JsonConfigProvider {
     }
 }
 
+/// Validates the config file at the given path
+pub async fn validate_config(path: PathBuf) -> Result<(), Error> {
+    tracing::debug!("Validating config file at path: {:?}", path);
+
+    if path.is_file() {
+        tracing::info!("Found config file at {}", path.to_string_lossy().to_string());
+        let mut f = tokio::fs::File::open(&path).await.map_err(Error::Read)?;
+        let mut contents = String::new();
+
+        // Read config file
+        f.read_to_string(&mut contents).await.map_err(Error::Read)?;
+
+        // Parse config file
+        serde_json::from_str::<Config>(&contents).map_err(Error::Parse)?;
+
+        Ok(())
+    } else {
+        Err(Error::NotFound(path))
+    }
+}
