@@ -3,7 +3,11 @@ use std::{net::TcpListener, os::unix::net::UnixListener, path::PathBuf};
 use actix_web::{App, HttpServer, dev::ServerHandle, get, web};
 use serde::{Deserialize, Serialize};
 
-use crate::interface::{InterfaceProvider, InterfaceProviderConfig};
+use crate::interface::{
+    InterfaceProvider, InterfaceProviderConfig, builtin::http::feature::FeatureSupport,
+};
+
+mod feature;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -38,24 +42,34 @@ pub enum Listener {
     Unix { path: PathBuf, fails: bool },
 }
 
+#[derive(Clone)]
+struct AppState {
+    feature_support: FeatureSupport,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct BackendInformationResponse {
     pub name: &'static str,
     pub version: &'static str,
+    pub features: Vec<String>,
 }
 
 impl BackendInformationResponse {
-    pub fn get() -> Self {
+    pub async fn get(feature_support: FeatureSupport) -> Self {
         Self {
             name: env!("CARGO_PKG_NAME"),
             version: env!("CARGO_PKG_VERSION"),
+            features: feature_support.get().await,
         }
     }
 }
 
+/// No feature ID associated with this endpoint.
 #[get("/api/info")]
-pub async fn backend_information() -> web::Json<BackendInformationResponse> {
-    web::Json(BackendInformationResponse::get())
+pub async fn backend_information(
+    state: web::Data<AppState>,
+) -> web::Json<BackendInformationResponse> {
+    web::Json(BackendInformationResponse::get(state.feature_support.clone()).await)
 }
 
 pub struct HttpInterfaceProvider {
@@ -114,7 +128,17 @@ async fn init(
 ) -> Result<(ServerHandle, tokio::sync::broadcast::Sender<Result<(), ()>>), Error> {
     let listeners = config.listeners.clone();
 
-    let mut http_server = HttpServer::new(|| App::new().service(backend_information));
+    let feature_support = FeatureSupport::new();
+
+    feature_support.register("test".to_string()).await;
+
+    let state = AppState { feature_support };
+
+    let mut http_server = HttpServer::new(move || {
+        App::new()
+            .app_data(web::Data::new(state.clone()))
+            .service(backend_information)
+    });
 
     // Count the number of registered listeners
     let mut registered: usize = 0;
