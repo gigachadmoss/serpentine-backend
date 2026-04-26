@@ -26,7 +26,7 @@ pub struct InterfaceProvidersConfig {
     pub http: Option<HttpInterfaceProviderConfig>,
 }
 
-trait InterfaceProviderConfig {}
+pub trait InterfaceProviderConfig {}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]

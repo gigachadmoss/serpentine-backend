@@ -1,13 +1,13 @@
+/// Connection to automotive data sources
+mod auto;
 /// Backend configuration
 pub mod config;
 /// Control thread
 mod control;
-/// Connection to automotive data sources
-mod auto;
-/// Metric handling and storage
-mod metric;
 /// External interaction
 mod interface;
+/// Metric handling and storage
+mod metric;
 
 use config::Config;
 
@@ -21,6 +21,8 @@ pub async fn start_server(config: Config) {
             return;
         }
     };
+
+    let storage_provider = metric::storage::setup_provider(config.storage).await;
 
     control::control_loop(i_termination_tx.subscribe()).await;
 }

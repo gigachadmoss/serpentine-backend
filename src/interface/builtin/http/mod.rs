@@ -1,6 +1,6 @@
 use std::{net::TcpListener, os::unix::net::UnixListener, path::PathBuf};
 
-use actix_web::{App, HttpServer, dev::ServerHandle};
+use actix_web::{App, HttpServer, dev::ServerHandle, get, web};
 use serde::{Deserialize, Serialize};
 
 use crate::interface::{InterfaceProvider, InterfaceProviderConfig};
@@ -36,6 +36,26 @@ pub enum Listener {
     },
     /// Unix socket path
     Unix { path: PathBuf, fails: bool },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct BackendInformationResponse {
+    pub name: &'static str,
+    pub version: &'static str,
+}
+
+impl BackendInformationResponse {
+    pub fn get() -> Self {
+        Self {
+            name: env!("CARGO_PKG_NAME"),
+            version: env!("CARGO_PKG_VERSION"),
+        }
+    }
+}
+
+#[get("/api/info")]
+pub async fn backend_information() -> web::Json<BackendInformationResponse> {
+    web::Json(BackendInformationResponse::get())
 }
 
 pub struct HttpInterfaceProvider {
@@ -94,7 +114,7 @@ async fn init(
 ) -> Result<(ServerHandle, tokio::sync::broadcast::Sender<Result<(), ()>>), Error> {
     let listeners = config.listeners.clone();
 
-    let mut http_server = HttpServer::new(|| App::new());
+    let mut http_server = HttpServer::new(|| App::new().service(backend_information));
 
     // Count the number of registered listeners
     let mut registered: usize = 0;
