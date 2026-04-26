@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 
 use crate::metric::{Metric, MetricValue};
 
-use super::super::StorageProvider;
+use super::super::{StorageProvider, StorageProviderConfig};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -26,6 +26,8 @@ pub struct JsonStorageProviderConfig {
     /// Whether to write the JSON file every write
     pub flush_on_write: bool,
 }
+
+impl StorageProviderConfig for JsonStorageProviderConfig {}
 
 pub struct JsonStorageProvider {
     path: PathBuf,
@@ -57,6 +59,7 @@ impl From<MetricValue> for JsonMetricValue {
 
 impl StorageProvider for JsonStorageProvider {
     type Error = Error;
+    type Config = JsonStorageProviderConfig;
 
     async fn write(&self, id: i64, value: MetricValue) -> Result<(), Self::Error> {
         {
