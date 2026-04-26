@@ -19,6 +19,8 @@ pub enum Error {
 #[serde(rename_all = "kebab-case")]
 pub struct HttpInterfaceProviderConfig {
     pub listeners: Vec<Listener>,
+    /// Whether to shutdown entire backend when HTTP server exits.
+    pub fails: bool,
 }
 
 impl InterfaceProviderConfig for HttpInterfaceProviderConfig {}
@@ -33,10 +35,7 @@ pub enum Listener {
         fails: bool,
     },
     /// Unix socket path
-    Unix {
-        path: PathBuf,
-        fails: bool,
-    }
+    Unix { path: PathBuf, fails: bool },
 }
 
 pub struct HttpInterfaceProvider {
@@ -49,7 +48,9 @@ impl InterfaceProvider for HttpInterfaceProvider {
     type Error = Error;
     type Config = HttpInterfaceProviderConfig;
 
-    fn init(config: Self::Config) -> impl std::future::Future<Output = Result<Self, Self::Error>> + Send
+    fn init(
+        config: Self::Config,
+    ) -> impl std::future::Future<Output = Result<Self, Self::Error>> + Send
     where
         Self: Sized,
     {
@@ -59,7 +60,9 @@ impl InterfaceProvider for HttpInterfaceProvider {
             let (handle, death_tx) = init(&config).await?;
 
             Ok(Self {
-                config, handle: handle, death_tx
+                config,
+                handle: handle,
+                death_tx,
             })
         }
     }
@@ -74,32 +77,40 @@ impl InterfaceProvider for HttpInterfaceProvider {
         match rx.recv().await {
             Ok(_) => {
                 tracing::info!("HTTP server exited");
-            },
+            }
             Err(e) => {
                 tracing::error!("Failed to receive HTTP server death signal: {}", e);
             }
         };
     }
+    fn get_fails(&self) -> bool {
+        self.config.fails
+    }
 }
 
 // Initializes HTTP server
-async fn init(config: &HttpInterfaceProviderConfig) -> Result<(ServerHandle, tokio::sync::broadcast::Sender<Result<(), ()>>), Error> {
+async fn init(
+    config: &HttpInterfaceProviderConfig,
+) -> Result<(ServerHandle, tokio::sync::broadcast::Sender<Result<(), ()>>), Error> {
     let listeners = config.listeners.clone();
 
-    let mut http_server = HttpServer::new(|| {
-        App::new()
-    });
+    let mut http_server = HttpServer::new(|| App::new());
+
+    // Count the number of registered listeners
+    let mut registered: usize = 0;
 
     for listener in listeners {
         match listener {
             Listener::Tcp { addr, port, fails } => {
                 tracing::info!("Setting up TCP listener on {}:{}", addr, port);
 
-                let l = match TcpListener::bind(format!("{}:{}", addr, port)).map_err(Error::TcpBind) {
+                let l = match TcpListener::bind(format!("{}:{}", addr, port))
+                    .map_err(Error::TcpBind)
+                {
                     Ok(l) => l,
                     Err(e) => {
                         tracing::error!("Failed to bind TCP listener on {}:{} ({})", addr, port, e);
-                        
+
                         if fails {
                             return Err(e);
                         }
@@ -109,9 +120,18 @@ async fn init(config: &HttpInterfaceProviderConfig) -> Result<(ServerHandle, tok
                 };
 
                 match http_server.listen(l).map_err(Error::HttpServer) {
-                    Ok(server) => {http_server = server;},
+                    Ok(server) => {
+                        http_server = server;
+
+                        registered += 1;
+                    }
                     Err(e) => {
-                        tracing::error!("Failed to listen over TCP on with {}:{} ({})", addr, port, e);
+                        tracing::error!(
+                            "Failed to listen over TCP on with {}:{} ({})",
+                            addr,
+                            port,
+                            e
+                        );
 
                         return Err(e);
                     }
@@ -134,7 +154,11 @@ async fn init(config: &HttpInterfaceProviderConfig) -> Result<(ServerHandle, tok
                 };
 
                 match http_server.listen_uds(l).map_err(Error::HttpServer) {
-                    Ok(server) => {http_server = server;},
+                    Ok(server) => {
+                        http_server = server;
+
+                        registered += 1;
+                    }
                     Err(e) => {
                         tracing::error!("Failed to listen on Unix socket listener on {:?}", path);
                         return Err(e);
@@ -144,13 +168,20 @@ async fn init(config: &HttpInterfaceProviderConfig) -> Result<(ServerHandle, tok
         }
     }
 
+    if registered == 0 {
+        return Err(Error::HttpServer(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "No listeners registered",
+        )));
+    }
+
     let server = http_server.run();
 
     // Makes it easier to kill later
     let handle = server.handle();
 
     // So we know when it dies
-    let death_tx  = tokio::sync::broadcast::channel::<Result<(), ()>>(1).0;
+    let death_tx = tokio::sync::broadcast::channel::<Result<(), ()>>(1).0;
 
     let inner_death_tx = death_tx.clone();
 
@@ -159,17 +190,19 @@ async fn init(config: &HttpInterfaceProviderConfig) -> Result<(ServerHandle, tok
         let r = server.await.map_err(Error::HttpServer);
 
         match inner_death_tx.send(r.map_err(|_| ())) {
-            Ok(_) => {},
-            Err(r) => {
-                match r.0 {
-                    Ok(_) => {
-                        tracing::error!("Failed to send HTTP server death signal, but HTTP server appears to have exited without error");
-                    },
-                    Err(_) => {
-                        tracing::error!("Failed to send HTTP server death signal, and got HTTP server error");
-                    }
+            Ok(_) => {}
+            Err(r) => match r.0 {
+                Ok(_) => {
+                    tracing::error!(
+                        "Failed to send HTTP server death signal, but HTTP server appears to have exited without error"
+                    );
                 }
-            }
+                Err(_) => {
+                    tracing::error!(
+                        "Failed to send HTTP server death signal, and got HTTP server error"
+                    );
+                }
+            },
         }
     });
 

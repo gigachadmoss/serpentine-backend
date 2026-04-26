@@ -4,7 +4,13 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{interface::{InterfaceConfig, builtin::{HttpInterfaceProviderConfig, http::Listener}}, metric::storage::{StorageConfig, StorageConfigProvider, builtin::JsonStorageProviderConfig}};
+use crate::{
+    interface::{
+        InterfaceConfig,
+        builtin::{HttpInterfaceProviderConfig, http::Listener},
+    },
+    metric::storage::{StorageConfig, StorageConfigProvider, builtin::JsonStorageProviderConfig},
+};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -22,23 +28,20 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             storage: StorageConfig {
-                provider: StorageConfigProvider::Json(
-                    JsonStorageProviderConfig {
-                        path: std::path::PathBuf::from("metrics.json"),
-                        flush_on_write: true,
-                    },
-                ),
+                provider: StorageConfigProvider::Json(JsonStorageProviderConfig {
+                    path: std::path::PathBuf::from("metrics.json"),
+                    flush_on_write: true,
+                }),
             },
             interface: InterfaceConfig {
                 providers: crate::interface::InterfaceProvidersConfig {
                     http: Some(HttpInterfaceProviderConfig {
-                        listeners: vec![
-                            Listener::Tcp {
-                                addr: "127.0.0.1".to_string(),
-                                port: 25089,
-                                fails: true,
-                            },
-                        ],
+                        listeners: vec![Listener::Tcp {
+                            addr: "127.0.0.1".to_string(),
+                            port: 25089,
+                            fails: true,
+                        }],
+                        fails: true,
                     }),
                 },
             },
@@ -46,7 +49,9 @@ impl Default for Config {
     }
 }
 
-pub async fn setup_config_provider(path: PathBuf) -> Result<impl ConfigProvider, Box<dyn std::error::Error>> {
+pub async fn setup_config_provider(
+    path: PathBuf,
+) -> Result<impl ConfigProvider, Box<dyn std::error::Error>> {
     builtin::json::JsonConfigProvider::init(path)
         .await
         .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
