@@ -12,7 +12,7 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Command {
-    Server {
+    Run {
         /// Path to config file
         #[clap(short, long)]
         config: PathBuf,
@@ -44,7 +44,7 @@ async fn main() {
     let args = Args::parse();
 
     match args.command {
-        Command::Server { config: c } => {
+        Command::Run { config: c } => {
             let config_provider = match serpentine_backend::config::setup_config_provider(c).await {
                 Ok(provider) => provider,
                 Err(e) => {
@@ -59,11 +59,13 @@ async fn main() {
                     tracing::error!("Failed to get config: {}", e);
                     std::process::exit(1);
                 }
-            }).await;
+            })
+            .await;
         }
         Command::Config(config_command) => match config_command {
             ConfigCommand::ValidateJson { config: p } => {
-                if let Err(e) = serpentine_backend::config::builtin::json::validate_config(p).await {
+                if let Err(e) = serpentine_backend::config::builtin::json::validate_config(p).await
+                {
                     tracing::error!("Config validation failed: {}", e);
                     std::process::exit(1);
                 } else {

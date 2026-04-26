@@ -24,6 +24,6 @@ pub trait StorageProvider {
     type Error: std::error::Error;
     type Config: StorageProviderConfig;
 
-    async fn write(&self, id: i64, value: MetricValue) ->  Result<(), Self::Error>;
+    async fn write(&self, id: i64, value: MetricValue) -> Result<(), Self::Error>;
     async fn read(&self, id: &str, timestamp: i64) -> Result<Option<super::Metric>, Self::Error>;
 }
