@@ -8,6 +8,7 @@ mod control;
 mod interface;
 /// Metric handling and storage
 mod metric;
+mod misc_util;
 
 use config::Config;
 

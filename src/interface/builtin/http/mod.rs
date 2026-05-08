@@ -4,10 +4,16 @@ use actix_web::{App, HttpServer, dev::ServerHandle, get, web};
 use serde::{Deserialize, Serialize};
 
 use crate::interface::{
-    InterfaceProvider, InterfaceProviderConfig, builtin::http::feature::FeatureSupport,
+    InterfaceProvider, InterfaceProviderConfig,
+    builtin::http::{
+        feature::FeatureSupport,
+        misc::{time_raw, time_raw_micros},
+    },
 };
 
 mod feature;
+// Miscellaneous utility endpoints
+mod misc;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -138,6 +144,8 @@ async fn init(
         App::new()
             .app_data(web::Data::new(state.clone()))
             .service(backend_information)
+            .service(time_raw)
+            .service(time_raw_micros)
     });
 
     // Count the number of registered listeners
